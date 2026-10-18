@@ -1,0 +1,36 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Temperature",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "telemetry-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{
+        "format": "time_series",
+        "rawSql": "SELECT occurred_at AS time, value, sensor_id::text AS metric FROM sensor_readings WHERE metric_type = 'temperature' AND $__timeFilter(occurred_at) ORDER BY occurred_at",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [] }
+    },
+    {
+      "title": "Speed",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "telemetry-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{
+        "format": "time_series",
+        "rawSql": "SELECT occurred_at AS time, value, sensor_id::text AS metric FROM sensor_readings WHERE metric_type = 'speed' AND $__timeFilter(occurred_at) ORDER BY occurred_at",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "rpm" }, "overrides": [] }
+    }
+  ],
+  "schemaVersion": 39,
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "GraphChart Telemetry",
+  "uid": "graphchart-telemetry",
+  "version": 1
+}

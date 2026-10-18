@@ -1,0 +1,189 @@
+services:
+  postgres:
+    image: apache/age:release_PG16_1.6.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-graphchart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graphchart_dev}
+      POSTGRES_DB: ${GRAPH_DB:-graphdb}
+    command: ["postgres", "-c", "shared_preload_libraries=age"]
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-graphchart} -d ${GRAPH_DB:-graphdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - graphchart
+
+  emqx:
+    image: emqx/emqx:5.8.6
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: graphchart-emqx
+      EMQX_ALLOW__ANONYMOUS: "true"
+    ports:
+      - "${EMQX_MQTT_PORT:-1883}:1883"
+      - "${EMQX_DASHBOARD_PORT:-18083}:18083"
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - graphchart
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      POSTGRES_USER: ${POSTGRES_USER:-graphchart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graphchart_dev}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - graphchart
+
+  graph-api:
+    build:
+      context: ./services/graph-api
+    restart: unless-stopped
+    environment:
+      GRAPH_DB_URL: jdbc:postgresql://postgres:5432/graphdb
+      POSTGRES_USER: ${POSTGRES_USER:-graphchart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graphchart_dev}
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8081/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - graphchart
+
+  admin-ui:
+    build:
+      context: ./apps/admin-ui
+    restart: unless-stopped
+    environment:
+      VITE_API_PROXY_TARGET: http://graph-api:8081
+    ports:
+      - "5173:5173"
+    depends_on:
+      graph-api:
+        condition: service_healthy
+    networks:
+      - graphchart
+
+  telemetry-api:
+    build:
+      context: ./services/telemetry-api
+    restart: unless-stopped
+    environment:
+      TELEMETRY_DB_URL: jdbc:postgresql://postgres:5432/telemetry
+      POSTGRES_USER: ${POSTGRES_USER:-graphchart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graphchart_dev}
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - graphchart
+
+  emqx-setup:
+    build:
+      context: ./infra/emqx
+    restart: "no"
+    environment:
+      EMQX_URL: http://emqx:18083
+      EMQX_USERNAME: admin
+      EMQX_PASSWORD: public
+      TELEMETRY_API_URL: http://telemetry-api:8082
+    depends_on:
+      emqx:
+        condition: service_healthy
+      telemetry-api:
+        condition: service_healthy
+    networks:
+      - graphchart
+
+  sensor-simulator:
+    build:
+      context: ./tools/sensor-simulator
+    env_file:
+      - ./tools/sensor-simulator/.env
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: emqx
+      MQTT_PORT: 1883
+      GRAPH_API_URL: http://graph-api:8081
+      SIMULATOR_INTERVAL_SECONDS: 60
+    profiles: [simulator]
+    depends_on:
+      emqx:
+        condition: service_healthy
+      graph-api:
+        condition: service_healthy
+    networks:
+      - graphchart
+
+  monitoring-ui:
+    build:
+      context: ./apps/monitoring-ui
+    restart: unless-stopped
+    environment:
+      VITE_GRAPH_API_PROXY_TARGET: http://graph-api:8081
+      VITE_TELEMETRY_API_PROXY_TARGET: http://telemetry-api:8082
+    ports:
+      - "5174:5174"
+    depends_on:
+      graph-api:
+        condition: service_healthy
+      telemetry-api:
+        condition: service_healthy
+    networks:
+      - graphchart
+
+volumes:
+  postgres_data:
+  emqx_data:
+  emqx_log:
+  grafana_data:
+
+networks:
+  graphchart:
+    driver: bridge
+

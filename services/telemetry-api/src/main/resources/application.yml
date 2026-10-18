@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: telemetry-api
+  datasource:
+    url: ${TELEMETRY_DB_URL:jdbc:postgresql://localhost:5432/telemetry}
+    username: ${POSTGRES_USER:graphchart}
+    password: ${POSTGRES_PASSWORD:graphchart_dev}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+telemetry:
+  retention-days: ${TELEMETRY_RETENTION_DAYS:7}
+

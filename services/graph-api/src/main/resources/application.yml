@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: graph-api
+  datasource:
+    url: ${GRAPH_DB_URL:jdbc:postgresql://localhost:5432/graphdb}
+    username: ${POSTGRES_USER:graphchart}
+    password: ${POSTGRES_PASSWORD:graphchart_dev}
+    hikari:
+      connection-init-sql: "LOAD 'age'; SET search_path = ag_catalog, \"$user\", public"
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+

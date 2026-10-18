@@ -1,0 +1,100 @@
+CREATE EXTENSION IF NOT EXISTS age;
+LOAD 'age';
+SET search_path = ag_catalog, "$user", public;
+
+INSERT INTO universities (id, name) VALUES
+('10000000-0000-0000-0000-000000000001', 'Demo University'),
+('10000000-0000-0000-0000-000000000002', 'City Technical University')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = now();
+
+INSERT INTO sites (id, university_id, name) VALUES
+('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Main Campus'),
+('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'North Campus'),
+('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', 'Science Campus'),
+('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000002', 'Fabrication Campus')
+ON CONFLICT (id) DO UPDATE SET university_id = EXCLUDED.university_id, name = EXCLUDED.name, updated_at = now();
+
+INSERT INTO rooms (id, site_id, name) VALUES
+('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Engineering Lab'),
+('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'Mechanical Workshop'),
+('30000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000002', 'North Plant Room'),
+('30000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000003', 'Robotics Lab'),
+('30000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000004', 'Fabrication Bay')
+ON CONFLICT (id) DO UPDATE SET site_id = EXCLUDED.site_id, name = EXCLUDED.name, updated_at = now();
+
+INSERT INTO machines (id, room_id, name) VALUES
+('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'Test Pump'),
+('40000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 'HVAC Unit A'),
+('40000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', 'Cooling Tower'),
+('40000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000002', 'Research Lathe'),
+('40000000-0000-0000-0000-000000000005', '30000000-0000-0000-0000-000000000004', 'Robot Arm A'),
+('40000000-0000-0000-0000-000000000006', '30000000-0000-0000-0000-000000000005', 'CNC Mill')
+ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name, updated_at = now();
+
+INSERT INTO sensors (id, machine_id, name, metric_type, unit) VALUES
+('00000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'Pump Temperature', 'temperature', '°C'),
+('00000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000001', 'Pump Speed', 'speed', 'rpm'),
+('00000000-0000-0000-0000-000000000003', '40000000-0000-0000-0000-000000000002', 'HVAC Temperature', 'temperature', '°C'),
+('00000000-0000-0000-0000-000000000004', '40000000-0000-0000-0000-000000000002', 'HVAC Fan Speed', 'speed', 'rpm'),
+('00000000-0000-0000-0000-000000000005', '40000000-0000-0000-0000-000000000003', 'Tower Temperature', 'temperature', '°C'),
+('00000000-0000-0000-0000-000000000006', '40000000-0000-0000-0000-000000000003', 'Tower Speed', 'speed', 'rpm'),
+('00000000-0000-0000-0000-000000000007', '40000000-0000-0000-0000-000000000004', 'Lathe Temperature', 'temperature', '°C'),
+('00000000-0000-0000-0000-000000000008', '40000000-0000-0000-0000-000000000004', 'Lathe Speed', 'speed', 'rpm'),
+('00000000-0000-0000-0000-000000000009', '40000000-0000-0000-0000-000000000005', 'Robot Temperature', 'temperature', '°C'),
+('00000000-0000-0000-0000-000000000010', '40000000-0000-0000-0000-000000000005', 'Robot Speed', 'speed', 'rpm'),
+('00000000-0000-0000-0000-000000000011', '40000000-0000-0000-0000-000000000006', 'Mill Temperature', 'temperature', '°C'),
+('00000000-0000-0000-0000-000000000012', '40000000-0000-0000-0000-000000000006', 'Mill Speed', 'speed', 'rpm')
+ON CONFLICT (id) DO UPDATE SET machine_id = EXCLUDED.machine_id, name = EXCLUDED.name, metric_type = EXCLUDED.metric_type, unit = EXCLUDED.unit, updated_at = now();
+
+INSERT INTO machine_location_history (machine_id, room_id, valid_from)
+SELECT id, room_id, now() FROM machines m
+WHERE NOT EXISTS (SELECT 1 FROM machine_location_history h WHERE h.machine_id = m.id AND h.valid_to IS NULL);
+
+INSERT INTO sensor_location_history (sensor_id, machine_id, valid_from)
+SELECT id, machine_id, now() FROM sensors s
+WHERE NOT EXISTS (SELECT 1 FROM sensor_location_history h WHERE h.sensor_id = s.id AND h.valid_to IS NULL);
+
+SELECT * FROM cypher('university_graph', $$
+  MERGE (u1:University {id: '10000000-0000-0000-0000-000000000001'}) SET u1.name = 'Demo University'
+  MERGE (u2:University {id: '10000000-0000-0000-0000-000000000002'}) SET u2.name = 'City Technical University'
+  MERGE (s1:Site {id: '20000000-0000-0000-0000-000000000001'}) SET s1.name = 'Main Campus'
+  MERGE (s2:Site {id: '20000000-0000-0000-0000-000000000002'}) SET s2.name = 'North Campus'
+  MERGE (s3:Site {id: '20000000-0000-0000-0000-000000000003'}) SET s3.name = 'Science Campus'
+  MERGE (s4:Site {id: '20000000-0000-0000-0000-000000000004'}) SET s4.name = 'Fabrication Campus'
+  MERGE (r1:Room {id: '30000000-0000-0000-0000-000000000001'}) SET r1.name = 'Engineering Lab'
+  MERGE (r2:Room {id: '30000000-0000-0000-0000-000000000002'}) SET r2.name = 'Mechanical Workshop'
+  MERGE (r3:Room {id: '30000000-0000-0000-0000-000000000003'}) SET r3.name = 'North Plant Room'
+  MERGE (r4:Room {id: '30000000-0000-0000-0000-000000000004'}) SET r4.name = 'Robotics Lab'
+  MERGE (r5:Room {id: '30000000-0000-0000-0000-000000000005'}) SET r5.name = 'Fabrication Bay'
+  MERGE (m1:Machine {id: '40000000-0000-0000-0000-000000000001'}) SET m1.name = 'Test Pump'
+  MERGE (m2:Machine {id: '40000000-0000-0000-0000-000000000002'}) SET m2.name = 'HVAC Unit A'
+  MERGE (m3:Machine {id: '40000000-0000-0000-0000-000000000003'}) SET m3.name = 'Cooling Tower'
+  MERGE (m4:Machine {id: '40000000-0000-0000-0000-000000000004'}) SET m4.name = 'Research Lathe'
+  MERGE (m5:Machine {id: '40000000-0000-0000-0000-000000000005'}) SET m5.name = 'Robot Arm A'
+  MERGE (m6:Machine {id: '40000000-0000-0000-0000-000000000006'}) SET m6.name = 'CNC Mill'
+  MERGE (t1:Sensor {id: '00000000-0000-0000-0000-000000000001'}) SET t1.name = 'Pump Temperature'
+  MERGE (t2:Sensor {id: '00000000-0000-0000-0000-000000000002'}) SET t2.name = 'Pump Speed'
+  MERGE (t3:Sensor {id: '00000000-0000-0000-0000-000000000003'}) SET t3.name = 'HVAC Temperature'
+  MERGE (t4:Sensor {id: '00000000-0000-0000-0000-000000000004'}) SET t4.name = 'HVAC Fan Speed'
+  MERGE (t5:Sensor {id: '00000000-0000-0000-0000-000000000005'}) SET t5.name = 'Tower Temperature'
+  MERGE (t6:Sensor {id: '00000000-0000-0000-0000-000000000006'}) SET t6.name = 'Tower Speed'
+  MERGE (t7:Sensor {id: '00000000-0000-0000-0000-000000000007'}) SET t7.name = 'Lathe Temperature'
+  MERGE (t8:Sensor {id: '00000000-0000-0000-0000-000000000008'}) SET t8.name = 'Lathe Speed'
+  MERGE (t9:Sensor {id: '00000000-0000-0000-0000-000000000009'}) SET t9.name = 'Robot Temperature'
+  MERGE (t10:Sensor {id: '00000000-0000-0000-0000-000000000010'}) SET t10.name = 'Robot Speed'
+  MERGE (t11:Sensor {id: '00000000-0000-0000-0000-000000000011'}) SET t11.name = 'Mill Temperature'
+  MERGE (t12:Sensor {id: '00000000-0000-0000-0000-000000000012'}) SET t12.name = 'Mill Speed'
+  MERGE (u1)-[:HAS_SITE]->(s1) MERGE (u1)-[:HAS_SITE]->(s2)
+  MERGE (u2)-[:HAS_SITE]->(s3) MERGE (u2)-[:HAS_SITE]->(s4)
+  MERGE (s1)-[:HAS_ROOM]->(r1) MERGE (s1)-[:HAS_ROOM]->(r2) MERGE (s2)-[:HAS_ROOM]->(r3)
+  MERGE (s3)-[:HAS_ROOM]->(r4) MERGE (s4)-[:HAS_ROOM]->(r5)
+  MERGE (r1)-[:HAS_MACHINE]->(m1) MERGE (r2)-[:HAS_MACHINE]->(m2) MERGE (r3)-[:HAS_MACHINE]->(m3)
+  MERGE (r2)-[:HAS_MACHINE]->(m4) MERGE (r4)-[:HAS_MACHINE]->(m5) MERGE (r5)-[:HAS_MACHINE]->(m6)
+  MERGE (m1)-[:HAS_SENSOR]->(t1) MERGE (m1)-[:HAS_SENSOR]->(t2)
+  MERGE (m2)-[:HAS_SENSOR]->(t3) MERGE (m2)-[:HAS_SENSOR]->(t4)
+  MERGE (m3)-[:HAS_SENSOR]->(t5) MERGE (m3)-[:HAS_SENSOR]->(t6)
+  MERGE (m4)-[:HAS_SENSOR]->(t7) MERGE (m4)-[:HAS_SENSOR]->(t8)
+  MERGE (m5)-[:HAS_SENSOR]->(t9) MERGE (m5)-[:HAS_SENSOR]->(t10)
+  MERGE (m6)-[:HAS_SENSOR]->(t11) MERGE (m6)-[:HAS_SENSOR]->(t12)
+  RETURN u1
+$$) AS (v agtype);
